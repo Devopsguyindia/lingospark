@@ -24,13 +24,24 @@ export default function DashboardPage() {
 
     const loadData = async () => {
         try {
-            const currentLang = user?.target_language || 'en';
+            let currentLang = user?.target_language || 'en';
+            let fetchLevel = activeLevel;
+
+            // Handle subcourse logic
+            if (activeLevel === 'Grammar-A1') {
+                currentLang = 'en_a1';
+                fetchLevel = 'A1';
+            } else if (currentLang === 'en_a1') {
+                // If in en_a1 but selected A1/A2/B1, fall back to base en
+                currentLang = 'en';
+            }
+
             const [summaryData, listeningData, speakingData, readingData, writingData] = await Promise.all([
                 progressAPI.summary().catch(() => null),
-                lessonsAPI.list({ level: activeLevel, skill: 'listening', language: currentLang }).catch(() => ({ lessons: [] })),
-                lessonsAPI.list({ level: activeLevel, skill: 'speaking', language: currentLang }).catch(() => ({ lessons: [] })),
-                lessonsAPI.list({ level: activeLevel, skill: 'reading', language: currentLang }).catch(() => ({ lessons: [] })),
-                lessonsAPI.list({ level: activeLevel, skill: 'writing', language: currentLang }).catch(() => ({ lessons: [] })),
+                lessonsAPI.list({ level: fetchLevel, skill: 'listening', language: currentLang }).catch(() => ({ lessons: [] })),
+                lessonsAPI.list({ level: fetchLevel, skill: 'speaking', language: currentLang }).catch(() => ({ lessons: [] })),
+                lessonsAPI.list({ level: fetchLevel, skill: 'reading', language: currentLang }).catch(() => ({ lessons: [] })),
+                lessonsAPI.list({ level: fetchLevel, skill: 'writing', language: currentLang }).catch(() => ({ lessons: [] })),
             ]);
 
             setSummary(summaryData);
@@ -90,7 +101,8 @@ export default function DashboardPage() {
                             Level: <strong style={{ color: 'var(--primary-light)' }}>{user?.cefr_level || 'A1'}</strong>
                         </p>
                         <div className="badge badge-course" style={{ background: 'var(--primary)', color: 'white', padding: '0.4rem 1rem', borderRadius: 'var(--radius-full)', fontWeight: 700 }}>
-                            {user?.target_language === 'de' ? '🇩🇪 Speak German' : '🇬🇧 Speak English'}
+                            {user?.target_language === 'de' ? '🇩🇪 Speak German' : 
+                             user?.target_language === 'en_a1' ? '📖 Grammar-A1' : '🇬🇧 Speak English'}
                         </div>
                         <p className="welcome-sub" style={{ opacity: 0.7 }}>Keep up the great work!</p>
                     </div>
@@ -141,23 +153,38 @@ export default function DashboardPage() {
                     <h2>Your LSRW Skills</h2>
 
                     <div className="level-tabs">
+                        {(user?.target_language === 'en' || user?.target_language === 'en_a1') ? (
+                            <button
+                                className={`level-tab ${activeLevel === 'Grammar-A1' ? 'active' : ''}`}
+                                onClick={() => setActiveLevel('Grammar-A1')}
+                            >
+                                📖 Grammar-A1
+                            </button>
+                        ) : (
+                            <button
+                                className={`level-tab ${activeLevel === 'A0' ? 'active' : ''}`}
+                                onClick={() => setActiveLevel('A0')}
+                            >
+                                A0 — Pre-Elementary
+                            </button>
+                        )}
                         <button
                             className={`level-tab ${activeLevel === 'A1' ? 'active' : ''}`}
                             onClick={() => setActiveLevel('A1')}
                         >
-                            A1 — Beginner
+                            A1 — Elementary
                         </button>
                         <button
                             className={`level-tab ${activeLevel === 'A2' ? 'active' : ''}`}
                             onClick={() => setActiveLevel('A2')}
                         >
-                            A2 — Elementary
+                            A2 — Intermediate
                         </button>
                         <button
                             className={`level-tab ${activeLevel === 'B1' ? 'active' : ''}`}
                             onClick={() => setActiveLevel('B1')}
                         >
-                            B1 — Intermediate
+                            B1 — Advanced
                         </button>
                     </div>
 
@@ -167,7 +194,7 @@ export default function DashboardPage() {
                             const percentage = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
 
                             return (
-                                <Link href={`/learn/${skill.key}`} key={skill.key} style={{ textDecoration: 'none' }}>
+                                <Link href={`/learn/${skill.key}?level=${activeLevel}`} key={skill.key} style={{ textDecoration: 'none' }}>
                                     <div className={`skill-card ${skill.key} animate-fade-in`}>
                                         <div className="skill-icon">{skill.icon}</div>
                                         <div className="skill-name">{skill.name}</div>

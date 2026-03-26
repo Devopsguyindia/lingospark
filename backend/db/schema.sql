@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name VARCHAR(100) NOT NULL,
   avatar VARCHAR(50) DEFAULT 'default',
   age INT NOT NULL CHECK (age >= 6),
-  cefr_level ENUM('A1', 'A2') DEFAULT 'A1',
+  cefr_level ENUM('A0', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2') DEFAULT 'A1',
   target_language VARCHAR(10) DEFAULT 'en',
   total_stars INT DEFAULT 0,
   total_xp INT DEFAULT 0,
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS lessons (
   id INT AUTO_INCREMENT PRIMARY KEY,
   language_code VARCHAR(10) NOT NULL,
-  cefr_level ENUM('A1', 'A2') NOT NULL,
+  cefr_level ENUM('A0', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2') NOT NULL,
   skill ENUM('listening', 'speaking', 'reading', 'writing') NOT NULL,
   title VARCHAR(200) NOT NULL,
   title_translation VARCHAR(200),
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS badges (
   description VARCHAR(255),
   icon VARCHAR(50) NOT NULL,
   skill ENUM('listening', 'speaking', 'reading', 'writing', 'general') NOT NULL,
-  cefr_level ENUM('A1', 'A2') DEFAULT NULL,
+  cefr_level ENUM('A0', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2') DEFAULT NULL,
   requirement_type VARCHAR(50) NOT NULL,
   requirement_value INT NOT NULL DEFAULT 1
 );

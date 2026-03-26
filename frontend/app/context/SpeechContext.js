@@ -26,13 +26,28 @@ export const SpeechProvider = ({ children }) => {
         }
     }, []);
 
-    const speak = useCallback((text) => {
+    const speak = useCallback((text, lang = null) => {
         if (!('speechSynthesis' in window)) return;
 
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
 
-        let targetLang = accent.toLowerCase();
+        // Normalize lang if provided (e.g. 'de' -> 'de-DE')
+        let targetLang = (lang || accent).toLowerCase();
+        
+        // Short code mapping
+        const langMap = {
+            'de': 'de-DE',
+            'en': 'en-US',
+            'es': 'es-ES',
+            'fr': 'fr-FR',
+            'it': 'it-IT'
+        };
+        
+        if (langMap[targetLang]) {
+            targetLang = langMap[targetLang];
+        }
+
         // Basic voice filtering heuristic based on name
         let matchingVoices = voices.filter(v =>
             v.lang.toLowerCase().startsWith(targetLang) ||
@@ -40,7 +55,13 @@ export const SpeechProvider = ({ children }) => {
         );
 
         if (matchingVoices.length === 0) {
-            // fallback to just the language code (e.g., 'en')
+            // fallback to just the language code part (e.g., first 2 chars 'de')
+            const shortLang = targetLang.substring(0, 2);
+            matchingVoices = voices.filter(v => v.lang.toLowerCase().startsWith(shortLang));
+        }
+
+        if (matchingVoices.length === 0) {
+            // Ultimate fallback to 'en'
             matchingVoices = voices.filter(v => v.lang.toLowerCase().startsWith('en'));
         }
 
@@ -48,8 +69,8 @@ export const SpeechProvider = ({ children }) => {
         if (matchingVoices.length > 0) {
             // Try to guess gender based on voice name for some common TTS engines
             const isFemale = voiceGender === 'female';
-            const femaleKeywords = ['female', 'girl', 'woman', 'zira', 'hazel', 'susan', 'heera', 'samantha', 'victoria', 'karen', 'moira', 'tessa'];
-            const maleKeywords = ['male', 'boy', 'man', 'david', 'george', 'ravi', 'mark', 'daniel', 'oliver'];
+            const femaleKeywords = ['female', 'girl', 'woman', 'zira', 'hazel', 'susan', 'heera', 'samantha', 'victoria', 'karen', 'moira', 'tessa', 'katja', 'hedda'];
+            const maleKeywords = ['male', 'boy', 'man', 'david', 'george', 'ravi', 'mark', 'daniel', 'oliver', 'stefan', 'hans'];
 
             selectedVoice = matchingVoices.find(v => {
                 const name = v.name.toLowerCase();
@@ -60,15 +81,8 @@ export const SpeechProvider = ({ children }) => {
                 }
             });
 
-            // If heuristic fails (like on Windows where names might just be "Microsoft David" or "Microsoft Zira"), 
-            // fallback to picking by index if there are multiple voices for the language
             if (!selectedVoice) {
-                if (matchingVoices.length > 1) {
-                    // Usually in Windows TTS, the first voice is Female (Zira) and second is Male (David), but it varies
-                    selectedVoice = isFemale ? matchingVoices[0] : matchingVoices[1];
-                } else {
-                    selectedVoice = matchingVoices[0];
-                }
+                selectedVoice = matchingVoices.length > 1 ? (isFemale ? matchingVoices[0] : matchingVoices[1]) : matchingVoices[0];
             }
         }
 
@@ -76,7 +90,7 @@ export const SpeechProvider = ({ children }) => {
             utterance.voice = selectedVoice;
         }
 
-        utterance.lang = accent;
+        utterance.lang = targetLang;
         utterance.rate = 0.85;
         utterance.pitch = voiceGender === 'female' ? 1.1 : 0.9;
 

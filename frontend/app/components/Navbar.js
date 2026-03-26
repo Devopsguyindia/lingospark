@@ -62,7 +62,7 @@ export default function Navbar() {
                 {loggedIn && (
                     <div className="course-switcher">
                         <button
-                            className={`course-btn ${user?.target_language === 'en' ? 'active' : ''}`}
+                            className={`course-btn ${user?.target_language === 'en' || user?.target_language === 'en_a1' ? 'active' : ''}`}
                             onClick={() => handleCourseSwitch('en')}
                         >
                             🇬🇧 English

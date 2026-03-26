@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import { isLoggedIn, lessonsAPI, assessmentsAPI, progressAPI, getStoredUser } from '../../lib/api';
@@ -9,6 +9,7 @@ import SpeechSettingsMini from '../../components/SpeechSettingsMini';
 
 export default function SpeakingPage() {
     const router = useRouter();
+    const [user, setUser] = useState(null);
     const [lessons, setLessons] = useState([]);
     const [currentLesson, setCurrentLesson] = useState(null);
     const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -18,8 +19,9 @@ export default function SpeakingPage() {
     const [answerState, setAnswerState] = useState(null);
     const [results, setResults] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [view, setView] = useState('list');
-    const [activeLevel, setActiveLevel] = useState('A1');
+    const [view, setView] = useState('list'); // 'list' | 'tutorial' | 'exercise' | 'results'
+    const [activeLevel, setActiveLevel] = useState(useSearchParams()?.get('level') || 'A1');
+    const [currentTutorialIndex, setCurrentTutorialIndex] = useState(0);
     const [showHint, setShowHint] = useState(false);
     const [speechSupported, setSpeechSupported] = useState(true);
     const recognitionRef = useRef(null);
@@ -32,16 +34,28 @@ export default function SpeakingPage() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) setSpeechSupported(false);
         }
-        loadLessons();
+        const u = getStoredUser();
+        setUser(u);
+        loadLessons(u);
     }, [activeLevel]);
 
-    const loadLessons = async () => {
+    const loadLessons = async (u) => {
         try {
-            const user = getStoredUser();
+            const currentUser = u || user || getStoredUser();
+            let currentLang = currentUser?.target_language || 'en';
+            let fetchLevel = activeLevel;
+
+            if (activeLevel === 'Grammar-A1') {
+                currentLang = 'en_a1';
+                fetchLevel = 'A1';
+            } else if (currentLang === 'en_a1') {
+                currentLang = 'en';
+            }
+
             const data = await lessonsAPI.list({
-                level: activeLevel,
+                level: fetchLevel,
                 skill: 'speaking',
-                language: user?.target_language || 'en'
+                language: currentLang
             });
             setLessons(data.lessons || []);
         } catch (err) {
@@ -56,11 +70,17 @@ export default function SpeakingPage() {
             const data = await lessonsAPI.get(lessonId);
             setCurrentLesson(data.lesson);
             setCurrentExerciseIndex(0);
+            setCurrentTutorialIndex(0);
             setAnswers([]);
             setTranscript('');
             setAnswerState(null);
             setShowHint(false);
-            setView('exercise');
+            
+            if (data.lesson.content?.tutorial && data.lesson.content.tutorial.length > 0) {
+                setView('tutorial');
+            } else {
+                setView('exercise');
+            }
         } catch (err) { console.error(err); }
     };
 
@@ -69,7 +89,7 @@ export default function SpeakingPage() {
         if (!SpeechRecognition) return;
 
         const recognition = new SpeechRecognition();
-        recognition.lang = 'en-US';
+        recognition.lang = currentLesson.language_code === 'de' ? 'de-DE' : 'en-US';
         recognition.interimResults = true;
         recognition.maxAlternatives = 3;
         recognition.continuous = false;
@@ -186,6 +206,45 @@ export default function SpeakingPage() {
         );
     }
 
+    // TUTORIAL
+    if (view === 'tutorial' && currentLesson?.content?.tutorial) {
+        const tutorial = currentLesson.content.tutorial;
+        const currentSlide = tutorial[currentTutorialIndex];
+
+        return (
+            <><Navbar />
+                <div className="page-container">
+                    <div className="exercise-container animate-fade-in">
+                        <div className="exercise-header">
+                            <h2 style={{ textAlign: 'center', color: 'var(--primary-light)' }}>🗣️ {currentLesson.title}: Speaking Tutorial</h2>
+                            <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Slide {currentTutorialIndex + 1} of {tutorial.length}</p>
+                        </div>
+                        <div style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem',
+                            padding: '3rem', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-lg)', margin: '2rem 0',
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+                        }}>
+                            <div style={{ fontSize: '8rem' }}>{currentSlide.visual}</div>
+                            <div style={{ textAlign: 'center' }}>
+                                <h3 style={{ fontSize: '2.2rem', marginBottom: '1rem' }}>{currentSlide.title}</h3>
+                                <p style={{ fontSize: '1.4rem', color: 'var(--text-secondary)', maxWidth: '600px' }}>{currentSlide.text}</p>
+                            </div>
+                            <button className={`speaker-btn ${isSpeaking ? 'playing' : ''}`} onClick={() => speakText(currentSlide.text, currentLesson.language_code)} style={{ fontSize: '2rem', padding: '1rem' }}>🔊</button>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem' }}>
+                            <button className="btn btn-secondary" onClick={() => currentTutorialIndex > 0 ? setCurrentTutorialIndex(currentTutorialIndex - 1) : setView('list')}>
+                                {currentTutorialIndex > 0 ? '← Previous' : '✕ Cancel'}
+                            </button>
+                            <button className="btn btn-primary" onClick={() => currentTutorialIndex < tutorial.length - 1 ? setCurrentTutorialIndex(currentTutorialIndex + 1) : setView('exercise')}>
+                                {currentTutorialIndex < tutorial.length - 1 ? 'Next →' : 'Start Speaking!'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </>
+        );
+    }
+
     // EXERCISE
     if (view === 'exercise' && currentExercise) {
         return (
@@ -270,7 +329,7 @@ export default function SpeakingPage() {
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                             <button
                                                 className={`speaker-btn ${isSpeaking ? 'playing' : ''}`}
-                                                onClick={() => speakText(currentExercise.prompt)}
+                                                onClick={() => speakText(currentExercise.prompt, currentLesson.language_code)}
                                                 title="Listen"
                                                 style={{ position: 'relative', top: 0, right: 0 }}
                                             >
@@ -337,7 +396,7 @@ export default function SpeakingPage() {
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                                 <button className="hint-toggle" onClick={() => {
                                     setShowHint(!showHint);
-                                    if (!showHint) speakText(currentExercise.hint || '');
+                                    if (!showHint) speakText(currentExercise.hint || '', currentLesson.language_code);
                                 }}>
                                     {showHint ? '🙈 Hide Hint' : '💡 Show Hint'}
                                 </button>
@@ -373,9 +432,24 @@ export default function SpeakingPage() {
                     <p>Practice your pronunciation with speech recognition</p>
                 </div>
                 <div className="level-tabs" style={{ marginBottom: 'var(--space-xl)' }}>
-                    <button className={`level-tab ${activeLevel === 'A1' ? 'active' : ''}`} onClick={() => setActiveLevel('A1')}>A1 — Beginner</button>
-                    <button className={`level-tab ${activeLevel === 'A2' ? 'active' : ''}`} onClick={() => setActiveLevel('A2')}>A2 — Elementary</button>
-                    <button className={`level-tab ${activeLevel === 'B1' ? 'active' : ''}`} onClick={() => setActiveLevel('B1')}>B1 — Intermediate</button>
+                    {(user?.target_language === 'en' || user?.target_language === 'en_a1') ? (
+                        <button
+                            className={`level-tab ${activeLevel === 'Grammar-A1' ? 'active' : ''}`}
+                            onClick={() => setActiveLevel('Grammar-A1')}
+                        >
+                            📖 Grammar-A1
+                        </button>
+                    ) : (
+                        <button
+                            className={`level-tab ${activeLevel === 'A0' ? 'active' : ''}`}
+                            onClick={() => setActiveLevel('A0')}
+                        >
+                            A0 — Pre-Elementary
+                        </button>
+                    )}
+                    <button className={`level-tab ${activeLevel === 'A1' ? 'active' : ''}`} onClick={() => setActiveLevel('A1')}>A1 — Elementary</button>
+                    <button className={`level-tab ${activeLevel === 'A2' ? 'active' : ''}`} onClick={() => setActiveLevel('A2')}>A2 — Intermediate</button>
+                    <button className={`level-tab ${activeLevel === 'B1' ? 'active' : ''}`} onClick={() => setActiveLevel('B1')}>B1 — Advanced</button>
                 </div>
                 <div className="lesson-list stagger-children">
                     {lessons.map((lesson, i) => (
